@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bella Italia - Reservas por Voz</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            max-width: 600px;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #e94560;
+        }
+        .subtitle {
+            font-size: 1.2rem;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+        }
+        .instructions {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+        .instructions h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+        .instructions ul {
+            list-style: none;
+            padding: 0;
+        }
+        .instructions li {
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .instructions li:last-child {
+            border-bottom: none;
+        }
+        .icon {
+            font-size: 1.5rem;
+        }
+        .status {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+        .status-item {
+            background: rgba(255,255,255,0.05);
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+        .status-item.online {
+            border: 1px solid #4ade80;
+        }
+        .status-item.online::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4ade80;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .footer {
+            margin-top: 40px;
+            color: #666;
+            font-size: 0.85rem;
+        }
+        .footer a {
+            color: #e94560;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bella Italia</h1>
+        <p class="subtitle">Asistente de Reservas por Voz</p>
+
+        <div class="instructions">
+            <h2>Puedes decirle al asistente:</h2>
+            <ul>
+                <li><span class="icon">📅</span> "Quiero reservar una mesa para 4 personas el viernes a las 8"</li>
+                <li><span class="icon">🔍</span> "Busca mis reservas" (te pedirá tu teléfono)</li>
+                <li><span class="icon">✏️</span> "Quiero cambiar mi reserva para las 9"</li>
+                <li><span class="icon">❌</span> "Necesito cancelar mi reserva"</li>
+                <li><span class="icon">🪑</span> "¿Hay disponibilidad para mañana?"</li>
+            </ul>
+        </div>
+
+        <div class="status">
+            <div class="status-item online">Servicio Activo</div>
+            <div class="status-item online">Google Sheets Conectado</div>
+        </div>
+
+        <p class="footer">
+            Haz clic en el botón de micrófono para comenzar<br>
+            <a href="https://docs.google.com/spreadsheets/d/1UZYHP7BsnCVOHxdhSj30b5v2TiR2XdDTGYrRhk-zxGE" target="_blank">Ver reservas en Google Sheets</a>
+        </p>
+    </div>
+
+    <!-- ElevenLabs Conversational AI Widget -->
+    <elevenlabs-convai agent-id="agent_7901kgfexyhvejbsr5ayg5nwxzsm"></elevenlabs-convai>
+    <script src="https://elevenlabs.io/convai-widget/index.js" async type="text/javascript"></script>
+</body>
+</html>

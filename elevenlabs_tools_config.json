@@ -1,0 +1,158 @@
+{
+  "tools": [
+    {
+      "name": "check_table_availability",
+      "description": "Verifica la disponibilidad de mesas para una fecha, hora y número de personas. Usa esta herramienta ANTES de hacer una reserva para confirmar que hay mesas disponibles.",
+      "type": "webhook",
+      "webhook": {
+        "url": "{{BASE_URL}}/widget-api/tables/v1/availability",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Fecha de la reserva en formato YYYY-MM-DD (ej: 2026-02-15)"
+          },
+          "time": {
+            "type": "string",
+            "description": "Hora de la reserva en formato HH:MM (ej: 14:00, 20:30)"
+          },
+          "party_size": {
+            "type": "integer",
+            "description": "Número de personas para la reserva (1-20)"
+          }
+        },
+        "required": ["date", "time", "party_size"]
+      }
+    },
+    {
+      "name": "create_reservation",
+      "description": "Crea una nueva reserva de mesa. Requiere fecha, hora, número de personas, nombre y teléfono del cliente. La reserva dura 2 horas automáticamente.",
+      "type": "webhook",
+      "webhook": {
+        "url": "{{BASE_URL}}/widget-api/tables/v1/reserve",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Fecha de la reserva en formato YYYY-MM-DD"
+          },
+          "time": {
+            "type": "string",
+            "description": "Hora de la reserva en formato HH:MM"
+          },
+          "party_size": {
+            "type": "integer",
+            "description": "Número de personas"
+          },
+          "customer_name": {
+            "type": "string",
+            "description": "Nombre completo del cliente"
+          },
+          "customer_phone": {
+            "type": "string",
+            "description": "Teléfono del cliente (con código de país, ej: +34612345678)"
+          },
+          "special_requests": {
+            "type": "string",
+            "description": "Peticiones especiales o notas (opcional)"
+          }
+        },
+        "required": ["date", "time", "party_size", "customer_name", "customer_phone"]
+      }
+    },
+    {
+      "name": "search_reservations",
+      "description": "Busca las reservas de un cliente por su número de teléfono. Útil para consultar, modificar o cancelar reservas existentes.",
+      "type": "webhook",
+      "webhook": {
+        "url": "{{BASE_URL}}/widget-api/tables/v1/search",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "Número de teléfono del cliente"
+          }
+        },
+        "required": ["phone"]
+      }
+    },
+    {
+      "name": "cancel_reservation",
+      "description": "Cancela una reserva existente. Requiere el ID de la reserva y el teléfono del cliente para verificación.",
+      "type": "webhook",
+      "webhook": {
+        "url": "{{BASE_URL}}/widget-api/tables/v1/cancel",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reservation_id": {
+            "type": "string",
+            "description": "ID de la reserva (formato RES-YYYYMMDDHHMMSS)"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Teléfono del cliente para verificación"
+          }
+        },
+        "required": ["reservation_id", "phone"]
+      }
+    },
+    {
+      "name": "modify_reservation",
+      "description": "Modifica la fecha y/o hora de una reserva existente. Verifica automáticamente la disponibilidad antes de hacer el cambio.",
+      "type": "webhook",
+      "webhook": {
+        "url": "{{BASE_URL}}/widget-api/tables/v1/modify",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reservation_id": {
+            "type": "string",
+            "description": "ID de la reserva a modificar"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Teléfono del cliente para verificación"
+          },
+          "new_date": {
+            "type": "string",
+            "description": "Nueva fecha en formato YYYY-MM-DD (opcional si solo cambia la hora)"
+          },
+          "new_time": {
+            "type": "string",
+            "description": "Nueva hora en formato HH:MM (opcional si solo cambia la fecha)"
+          }
+        },
+        "required": ["reservation_id", "phone"]
+      }
+    }
+  ]
+}
