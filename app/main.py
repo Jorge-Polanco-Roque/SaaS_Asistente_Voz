@@ -8,7 +8,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI(title="Bella Italia Voice Service", version="1.0.0")
+from config.config_loader import config
+
+app = FastAPI(title=f"{config.business_name} Voice Service", version="1.0.0")
 
 # Import and include routers
 from .api.tables import router as tables_router
@@ -33,7 +35,7 @@ ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
 async def liveness():
     return {
         "status": "ok",
-        "service": "voice",
+        "service": config.business_name,
         "version": "1.0.0"
     }
 
@@ -134,7 +136,7 @@ async def get_menu_by_category(category: str):
 @app.get("/")
 async def root():
     return {
-        "service": "Bella Italia Voice Service",
+        "service": f"{config.business_name} Voice Service",
         "version": "1.0.0",
         "status": "running",
         "endpoints": {

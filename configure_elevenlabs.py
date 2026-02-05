@@ -2,12 +2,16 @@
 """
 Configure ElevenLabs Agent with Table Reservation Tools.
 Creates tools in workspace and associates them to the agent.
+Reads tool descriptions from config/business.yaml and prompt from config/agent_prompt.txt.
 """
 import os
+import sys
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from config.config_loader import config
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
@@ -21,12 +25,15 @@ HEADERS = {
 
 
 def get_tools_config():
-    """Return the tools configuration for table reservations."""
+    """Return the tools configuration for table reservations.
+    Tool descriptions are read from config/business.yaml.
+    """
+    descs = config.tool_descriptions
     return [
         {
             "type": "webhook",
             "name": "check_table_availability",
-            "description": "Verifica la disponibilidad de mesas para una fecha, hora y número de personas. SIEMPRE usa esta herramienta ANTES de crear una reserva.",
+            "description": descs.get("check_availability", "Check table availability"),
             "api_schema": {
                 "url": f"{BASE_URL}/widget-api/tables/v1/availability",
                 "method": "POST",
@@ -35,7 +42,7 @@ def get_tools_config():
                     "properties": {
                         "date": {"type": "string", "description": "Fecha en formato YYYY-MM-DD"},
                         "time": {"type": "string", "description": "Hora en formato HH:MM"},
-                        "party_size": {"type": "integer", "description": "Número de personas (1-20)"}
+                        "party_size": {"type": "integer", "description": "Numero de personas (1-20)"}
                     },
                     "required": ["date", "time", "party_size"]
                 }
@@ -44,7 +51,7 @@ def get_tools_config():
         {
             "type": "webhook",
             "name": "create_reservation",
-            "description": "Crea una nueva reserva. Verifica disponibilidad primero. NO menciones códigos de reserva al cliente, solo confirma la reserva con fecha, hora y nombre.",
+            "description": descs.get("create_reservation", "Create a reservation"),
             "api_schema": {
                 "url": f"{BASE_URL}/widget-api/tables/v1/reserve",
                 "method": "POST",
@@ -53,9 +60,9 @@ def get_tools_config():
                     "properties": {
                         "date": {"type": "string", "description": "Fecha en formato YYYY-MM-DD"},
                         "time": {"type": "string", "description": "Hora en formato HH:MM"},
-                        "party_size": {"type": "integer", "description": "Número de personas"},
+                        "party_size": {"type": "integer", "description": "Numero de personas"},
                         "customer_name": {"type": "string", "description": "Nombre del cliente"},
-                        "customer_phone": {"type": "string", "description": "Teléfono del cliente (solo números, sin código de país)"},
+                        "customer_phone": {"type": "string", "description": "Telefono del cliente (solo numeros, sin codigo de pais)"},
                         "special_requests": {"type": "string", "description": "Peticiones especiales (opcional)"}
                     },
                     "required": ["date", "time", "party_size", "customer_name", "customer_phone"]
@@ -65,14 +72,14 @@ def get_tools_config():
         {
             "type": "webhook",
             "name": "search_reservations",
-            "description": "Busca las reservas de un cliente por su número de teléfono (solo números).",
+            "description": descs.get("search_reservations", "Search reservations by phone"),
             "api_schema": {
                 "url": f"{BASE_URL}/widget-api/tables/v1/search",
                 "method": "POST",
                 "request_body_schema": {
                     "type": "object",
                     "properties": {
-                        "phone": {"type": "string", "description": "Teléfono del cliente (solo números)"}
+                        "phone": {"type": "string", "description": "Telefono del cliente (solo numeros)"}
                     },
                     "required": ["phone"]
                 }
@@ -81,7 +88,7 @@ def get_tools_config():
         {
             "type": "webhook",
             "name": "cancel_reservation",
-            "description": "Cancela una reserva. Primero busca la reserva con search_reservations usando el teléfono del cliente.",
+            "description": descs.get("cancel_reservation", "Cancel a reservation"),
             "api_schema": {
                 "url": f"{BASE_URL}/widget-api/tables/v1/cancel",
                 "method": "POST",
@@ -89,7 +96,7 @@ def get_tools_config():
                     "type": "object",
                     "properties": {
                         "reservation_id": {"type": "string", "description": "ID interno de la reserva"},
-                        "phone": {"type": "string", "description": "Teléfono del cliente"}
+                        "phone": {"type": "string", "description": "Telefono del cliente"}
                     },
                     "required": ["reservation_id", "phone"]
                 }
@@ -98,7 +105,7 @@ def get_tools_config():
         {
             "type": "webhook",
             "name": "modify_reservation",
-            "description": "Modifica fecha y/o hora de una reserva. Primero busca la reserva con search_reservations.",
+            "description": descs.get("modify_reservation", "Modify a reservation"),
             "api_schema": {
                 "url": f"{BASE_URL}/widget-api/tables/v1/modify",
                 "method": "POST",
@@ -106,7 +113,7 @@ def get_tools_config():
                     "type": "object",
                     "properties": {
                         "reservation_id": {"type": "string", "description": "ID interno de la reserva"},
-                        "phone": {"type": "string", "description": "Teléfono del cliente"},
+                        "phone": {"type": "string", "description": "Telefono del cliente"},
                         "new_date": {"type": "string", "description": "Nueva fecha YYYY-MM-DD (opcional)"},
                         "new_time": {"type": "string", "description": "Nueva hora HH:MM (opcional)"}
                     },
@@ -117,7 +124,7 @@ def get_tools_config():
         {
             "type": "webhook",
             "name": "update_notes",
-            "description": "Agrega notas a una reserva existente. Usa esto para agregar restricciones alimenticias, alergias, peticiones especiales, celebraciones, o cualquier información adicional DURANTE la conversación. Las notas se AGREGAN a las existentes.",
+            "description": descs.get("update_notes", "Add notes to a reservation"),
             "api_schema": {
                 "url": f"{BASE_URL}/widget-api/tables/v1/update-notes",
                 "method": "POST",
@@ -125,7 +132,7 @@ def get_tools_config():
                     "type": "object",
                     "properties": {
                         "reservation_id": {"type": "string", "description": "ID interno de la reserva"},
-                        "phone": {"type": "string", "description": "Teléfono del cliente"},
+                        "phone": {"type": "string", "description": "Telefono del cliente"},
                         "notes": {"type": "string", "description": "Notas a agregar (restricciones, alergias, peticiones, etc.)"}
                     },
                     "required": ["reservation_id", "phone", "notes"]
@@ -169,6 +176,50 @@ def get_agent():
     return None
 
 
+def update_agent_prompt():
+    """Update the agent's system prompt and voice configuration."""
+    prompt_text = config.agent_prompt
+    if not prompt_text:
+        print("Warning: agent_prompt.txt is empty, skipping prompt update")
+        return False
+
+    # Get voice ID from environment (optional)
+    voice_id = os.getenv("ELEVENLABS_VOICE_ID")
+
+    payload = {
+        "conversation_config": {
+            "agent": {
+                "prompt": {
+                    "prompt": prompt_text
+                }
+            }
+        }
+    }
+
+    # Add voice configuration if voice_id is set
+    if voice_id:
+        payload["conversation_config"]["tts"] = {
+            "voice_id": voice_id
+        }
+        print(f"Voice ID: {voice_id}")
+
+    response = requests.patch(
+        f"{API_BASE}/agents/{ELEVENLABS_AGENT_ID}",
+        headers=HEADERS,
+        json=payload
+    )
+
+    if response.status_code == 200:
+        print("Agent prompt updated successfully")
+        if voice_id:
+            print("Voice configuration updated successfully")
+        return True
+    else:
+        print(f"Failed to update agent prompt: {response.status_code}")
+        print(f"  {response.text}")
+        return False
+
+
 def update_agent_tool_ids(tool_ids):
     """Update agent with tool IDs."""
     # Get current agent config
@@ -203,7 +254,7 @@ def update_agent_tool_ids(tool_ids):
 
 
 def configure_agent():
-    """Main function to configure agent with reservation tools."""
+    """Main function to configure agent with reservation tools and prompt."""
     if not ELEVENLABS_API_KEY:
         print("Error: ELEVENLABS_API_KEY not set")
         return False
@@ -216,21 +267,25 @@ def configure_agent():
         print("Error: Set WEBHOOK_BASE_URL in .env")
         return False
 
+    print(f"Business: {config.business_name}")
     print(f"Agent: {ELEVENLABS_AGENT_ID}")
     print(f"Webhook URL: {BASE_URL}\n")
 
-    # Get existing tools
-    print("Checking existing tools...")
+    # Step 1: Update agent prompt
+    print("Updating agent prompt...")
+    update_agent_prompt()
+
+    # Step 2: Configure tools
+    print("\nChecking existing tools...")
     existing_tools = get_existing_tools()
     existing_names = {t.get("tool_config", {}).get("name"): t.get("id") for t in existing_tools}
 
     tools_config = get_tools_config()
     tool_ids = []
 
-    # Create or reuse tools
     print(f"\nConfiguring {len(tools_config)} tools...")
-    for config in tools_config:
-        name = config["name"]
+    for tc in tools_config:
+        name = tc["name"]
 
         # Delete existing tool with same name to update it
         if name in existing_names:
@@ -239,7 +294,7 @@ def configure_agent():
 
         # Create tool
         print(f"  Creating: {name}")
-        result = create_tool(config)
+        result = create_tool(tc)
         if result:
             tool_ids.append(result["id"])
             print(f"    -> ID: {result['id']}")
@@ -250,13 +305,13 @@ def configure_agent():
         print("\nNo tools were created!")
         return False
 
-    # Associate tools with agent
+    # Step 3: Associate tools with agent
     print(f"\nAssociating {len(tool_ids)} tools with agent...")
     if update_agent_tool_ids(tool_ids):
-        print("\n✅ Agent configured successfully!")
+        print("\nAgent configured successfully!")
         return True
     else:
-        print("\n❌ Failed to update agent")
+        print("\nFailed to update agent")
         return False
 
 
@@ -265,8 +320,8 @@ def list_tools():
     print("\n=== Workspace Tools ===")
     tools = get_existing_tools()
     for t in tools:
-        config = t.get("tool_config", {})
-        print(f"  [{config.get('type')}] {config.get('name')} (ID: {t.get('id')})")
+        tc = t.get("tool_config", {})
+        print(f"  [{tc.get('type')}] {tc.get('name')} (ID: {t.get('id')})")
 
     print("\n=== Agent Tools ===")
     agent = get_agent()
@@ -279,12 +334,15 @@ def list_tools():
         for t in tools:
             print(f"    - [{t.get('type')}] {t.get('name')}")
 
+    print("\n=== Config ===")
+    print(f"  Business: {config.business_name}")
+    print(f"  Prompt length: {len(config.agent_prompt)} chars")
+    print(f"  Tool descriptions: {list(config.tool_descriptions.keys())}")
+
 
 if __name__ == "__main__":
-    import sys
-
     print("=" * 60)
-    print("ElevenLabs - Table Reservation Tools Configuration")
+    print(f"{config.business_name} - ElevenLabs Tools Configuration")
     print("=" * 60)
 
     if len(sys.argv) > 1 and sys.argv[1] == "list":

@@ -12,6 +12,8 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from config.config_loader import config
+
 logger = logging.getLogger(__name__)
 
 
@@ -180,12 +182,14 @@ class GoogleSheetsService:
         date: str,
         time: str,
         party_size: int,
-        duration_hours: float = 2.0
+        duration_hours: float = None
     ) -> Dict[str, Any]:
         """
         Check available tables for given date, time, and party size.
         Returns available tables sorted by capacity (smallest first).
         """
+        if duration_hours is None:
+            duration_hours = config.duration_hours
         tables = self.get_all_tables()
         reservations = self.get_reservations_for_date(date)
 
@@ -195,7 +199,7 @@ class GoogleSheetsService:
         if not suitable_tables:
             return {
                 "available": False,
-                "message": f"No hay mesas con capacidad para {party_size} personas",
+                "message": config.msg("no_tables_capacity", party_size=party_size),
                 "tables": []
             }
 
@@ -225,13 +229,13 @@ class GoogleSheetsService:
         if not available_tables:
             return {
                 "available": False,
-                "message": f"No hay mesas disponibles para {party_size} personas el {date} a las {time}",
+                "message": config.msg("no_availability", party_size=party_size, date=date, time=time),
                 "tables": []
             }
 
         return {
             "available": True,
-            "message": f"Hay {len(available_tables)} mesa(s) disponible(s)",
+            "message": config.msg("tables_available", count=len(available_tables)),
             "tables": available_tables,
             "recommended_table": available_tables[0]
         }
@@ -244,12 +248,14 @@ class GoogleSheetsService:
         customer_name: str,
         customer_phone: str,
         special_requests: str = "",
-        duration_hours: float = 2.0
+        duration_hours: float = None
     ) -> Dict[str, Any]:
         """
         Create a new reservation.
         Automatically assigns the best available table.
         """
+        if duration_hours is None:
+            duration_hours = config.duration_hours
         # Check availability
         availability = self.check_table_availability(date, time, party_size, duration_hours)
 
@@ -292,12 +298,12 @@ class GoogleSheetsService:
             if not success:
                 return {
                     "success": False,
-                    "message": "Error al guardar la reserva en Google Sheets"
+                    "message": config.msg("sheets_save_error")
                 }
 
         return {
             "success": True,
-            "message": f"Reserva confirmada para {party_size} personas el {date} a las {time}",
+            "message": config.msg("reservation_confirmed", party_size=party_size, date=date, time=time),
             "reservation": {
                 "id": reservation_id,
                 "table": table,
@@ -321,7 +327,7 @@ class GoogleSheetsService:
         if len(data) < 2:
             return {
                 "found": False,
-                "message": "No se encontraron reservas",
+                "message": config.msg("no_reservations_found"),
                 "reservations": []
             }
 
@@ -350,7 +356,7 @@ class GoogleSheetsService:
         if not reservations:
             return {
                 "found": False,
-                "message": f"No se encontraron reservas para el teléfono {phone}",
+                "message": config.msg("no_reservations_phone", phone=phone),
                 "reservations": []
             }
 
@@ -359,7 +365,7 @@ class GoogleSheetsService:
 
         return {
             "found": True,
-            "message": f"Se encontraron {len(reservations)} reserva(s)",
+            "message": config.msg("reservations_found", count=len(reservations)),
             "reservations": reservations
         }
 
@@ -372,7 +378,7 @@ class GoogleSheetsService:
         if len(data) < 2:
             return {
                 "success": False,
-                "message": "Reserva no encontrada"
+                "message": config.msg("reservation_not_found", reservation_id=reservation_id)
             }
 
         normalized_phone = self._normalize_phone(phone)
@@ -384,13 +390,13 @@ class GoogleSheetsService:
                 if row_phone != normalized_phone:
                     return {
                         "success": False,
-                        "message": "El teléfono no coincide con la reserva"
+                        "message": config.msg("phone_mismatch")
                     }
 
                 if row[8].lower() == "cancelada":
                     return {
                         "success": False,
-                        "message": "Esta reserva ya está cancelada"
+                        "message": config.msg("already_cancelled")
                     }
 
                 # Update status to cancelled (column 9 = I)
@@ -399,7 +405,7 @@ class GoogleSheetsService:
                 if success:
                     return {
                         "success": True,
-                        "message": f"Reserva {reservation_id} cancelada correctamente",
+                        "message": config.msg("reservation_cancelled", reservation_id=reservation_id),
                         "reservation": {
                             "id": row[0],
                             "fecha": row[2],
@@ -410,12 +416,12 @@ class GoogleSheetsService:
                 else:
                     return {
                         "success": False,
-                        "message": "Error al actualizar el estado de la reserva"
+                        "message": config.msg("sheets_update_error")
                     }
 
         return {
             "success": False,
-            "message": f"Reserva {reservation_id} no encontrada"
+            "message": config.msg("reservation_not_found", reservation_id=reservation_id)
         }
 
     def modify_reservation(
@@ -424,12 +430,14 @@ class GoogleSheetsService:
         phone: str,
         new_date: Optional[str] = None,
         new_time: Optional[str] = None,
-        duration_hours: float = 2.0
+        duration_hours: float = None
     ) -> Dict[str, Any]:
         """
         Modify an existing reservation's date and/or time.
         Verifies availability before making changes.
         """
+        if duration_hours is None:
+            duration_hours = config.duration_hours
         if not self.is_configured:
             return self._mock_modify_reservation(reservation_id, phone, new_date, new_time)
 
@@ -437,7 +445,7 @@ class GoogleSheetsService:
         if len(data) < 2:
             return {
                 "success": False,
-                "message": "Reserva no encontrada"
+                "message": config.msg("reservation_not_found", reservation_id=reservation_id)
             }
 
         normalized_phone = self._normalize_phone(phone)
@@ -449,13 +457,13 @@ class GoogleSheetsService:
                 if row_phone != normalized_phone:
                     return {
                         "success": False,
-                        "message": "El teléfono no coincide con la reserva"
+                        "message": config.msg("phone_mismatch")
                     }
 
                 if row[8].lower() == "cancelada":
                     return {
                         "success": False,
-                        "message": "No se puede modificar una reserva cancelada"
+                        "message": config.msg("cannot_modify_cancelled")
                     }
 
                 # Get current values
@@ -472,7 +480,7 @@ class GoogleSheetsService:
                 if target_date == current_date and target_time == current_time:
                     return {
                         "success": False,
-                        "message": "No se especificaron cambios en fecha u hora"
+                        "message": config.msg("no_changes")
                     }
 
                 # Check availability for new slot (excluding current reservation)
@@ -483,7 +491,7 @@ class GoogleSheetsService:
                 if not availability["available"]:
                     return {
                         "success": False,
-                        "message": f"No hay disponibilidad para {target_date} a las {target_time}. {availability['message']}"
+                        "message": config.msg("no_availability_modify", date=target_date, time=target_time, detail=availability['message'])
                     }
 
                 # Calculate new end time
@@ -500,7 +508,7 @@ class GoogleSheetsService:
                 if success:
                     return {
                         "success": True,
-                        "message": f"Reserva modificada: {target_date} a las {target_time}",
+                        "message": config.msg("reservation_modified", date=target_date, time=target_time),
                         "reservation": {
                             "id": reservation_id,
                             "fecha_anterior": current_date,
@@ -514,12 +522,12 @@ class GoogleSheetsService:
                 else:
                     return {
                         "success": False,
-                        "message": "Error al actualizar la reserva en Google Sheets"
+                        "message": config.msg("sheets_modify_error")
                     }
 
         return {
             "success": False,
-            "message": f"Reserva {reservation_id} no encontrada"
+            "message": config.msg("reservation_not_found", reservation_id=reservation_id)
         }
 
     def update_notes(
@@ -539,7 +547,7 @@ class GoogleSheetsService:
         if len(data) < 2:
             return {
                 "success": False,
-                "message": "Reserva no encontrada"
+                "message": config.msg("reservation_not_found", reservation_id=reservation_id)
             }
 
         normalized_phone = self._normalize_phone(phone)
@@ -551,13 +559,13 @@ class GoogleSheetsService:
                 if row_phone != normalized_phone:
                     return {
                         "success": False,
-                        "message": "El teléfono no coincide con la reserva"
+                        "message": config.msg("phone_mismatch")
                     }
 
                 if row[8].lower() == "cancelada":
                     return {
                         "success": False,
-                        "message": "No se pueden agregar notas a una reserva cancelada"
+                        "message": config.msg("cannot_add_notes_cancelled")
                     }
 
                 # Get current notes and append new ones
@@ -573,7 +581,7 @@ class GoogleSheetsService:
                 if success:
                     return {
                         "success": True,
-                        "message": f"Notas actualizadas para la reserva",
+                        "message": config.msg("notes_updated"),
                         "reservation": {
                             "id": row[0],
                             "fecha": row[2],
@@ -585,12 +593,12 @@ class GoogleSheetsService:
                 else:
                     return {
                         "success": False,
-                        "message": "Error al actualizar las notas"
+                        "message": config.msg("sheets_notes_error")
                     }
 
         return {
             "success": False,
-            "message": f"Reserva {reservation_id} no encontrada"
+            "message": config.msg("reservation_not_found", reservation_id=reservation_id)
         }
 
     def _mock_update_notes(self, reservation_id: str, phone: str, notes: str) -> Dict[str, Any]:
@@ -615,9 +623,11 @@ class GoogleSheetsService:
         time: str,
         party_size: int,
         exclude_reservation_id: str,
-        duration_hours: float = 2.0
+        duration_hours: float = None
     ) -> Dict[str, Any]:
         """Check availability excluding a specific reservation (for modifications)."""
+        if duration_hours is None:
+            duration_hours = config.duration_hours
         tables = self.get_all_tables()
 
         # Get all reservations for the date
@@ -642,7 +652,7 @@ class GoogleSheetsService:
         if not suitable_tables:
             return {
                 "available": False,
-                "message": f"No hay mesas con capacidad para {party_size} personas"
+                "message": config.msg("no_tables_capacity", party_size=party_size)
             }
 
         # Calculate requested time slot
@@ -664,12 +674,12 @@ class GoogleSheetsService:
         if not available_tables:
             return {
                 "available": False,
-                "message": "Todas las mesas están ocupadas en ese horario"
+                "message": config.msg("all_tables_occupied")
             }
 
         return {
             "available": True,
-            "message": f"Hay {len(available_tables)} mesa(s) disponible(s)"
+            "message": config.msg("tables_available", count=len(available_tables))
         }
 
     def _mock_modify_reservation(
@@ -721,16 +731,8 @@ class GoogleSheetsService:
 
     # Mock data methods (used when Sheets is not configured)
     def _get_mock_tables(self) -> List[Dict[str, Any]]:
-        """Return mock table data for testing."""
-        return [
-            {"id": "1", "nombre": "Mesa 1", "capacidad": 2, "ubicacion": "interior", "activa": True},
-            {"id": "2", "nombre": "Mesa 2", "capacidad": 4, "ubicacion": "interior", "activa": True},
-            {"id": "3", "nombre": "Mesa 3", "capacidad": 4, "ubicacion": "interior", "activa": True},
-            {"id": "4", "nombre": "Mesa 4", "capacidad": 6, "ubicacion": "interior", "activa": True},
-            {"id": "5", "nombre": "Mesa Terraza 1", "capacidad": 4, "ubicacion": "terraza", "activa": True},
-            {"id": "6", "nombre": "Mesa Terraza 2", "capacidad": 6, "ubicacion": "terraza", "activa": True},
-            {"id": "7", "nombre": "Mesa Privada", "capacidad": 8, "ubicacion": "interior", "activa": True},
-        ]
+        """Return mock table data from config for testing."""
+        return config.get_mock_tables()
 
     def _get_mock_reservations(self, date: str) -> List[Dict[str, Any]]:
         """Return mock reservations for testing."""

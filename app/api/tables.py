@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from ..services.google_sheets_service import sheets_service
+from config.config_loader import config
 
 router = APIRouter(prefix="/widget-api/tables/v1", tags=["tables"])
 
@@ -19,7 +20,7 @@ class AvailabilityRequest(BaseModel):
     date: str = Field(..., description="Date in YYYY-MM-DD format", examples=["2026-02-10"])
     time: str = Field(..., description="Time in HH:MM format", examples=["14:00"])
     party_size: int = Field(..., ge=1, le=20, description="Number of people")
-    duration_hours: Optional[float] = Field(2.0, ge=0.5, le=6.0, description="Duration in hours")
+    duration_hours: Optional[float] = Field(None, ge=0.5, le=6.0, description="Duration in hours (defaults to config)")
 
 
 class ReserveRequest(BaseModel):
@@ -30,7 +31,7 @@ class ReserveRequest(BaseModel):
     customer_name: str = Field(..., min_length=2, max_length=100, description="Customer name")
     customer_phone: str = Field(..., min_length=7, max_length=20, description="Customer phone")
     special_requests: Optional[str] = Field("", max_length=500, description="Special requests or notes")
-    duration_hours: Optional[float] = Field(2.0, ge=0.5, le=6.0, description="Duration in hours")
+    duration_hours: Optional[float] = Field(None, ge=0.5, le=6.0, description="Duration in hours (defaults to config)")
 
 
 class SearchRequest(BaseModel):
@@ -134,56 +135,35 @@ async def root():
     Get information about available table reservation tools.
     This endpoint provides documentation for ElevenLabs Server Tools configuration.
     """
+    descs = config.tool_descriptions
     return {
-        "service": "Table Reservation API",
+        "service": f"{config.business_name} - Table Reservation API",
         "version": "1.0.0",
-        "description": "Sistema de reservas de mesas para restaurante usando Google Sheets",
+        "description": f"Sistema de reservas de mesas para {config.business_type} usando Google Sheets",
         "tools": {
             "check_table_availability": {
                 "endpoint": "POST /widget-api/tables/v1/availability",
-                "description": "Verificar disponibilidad de mesas para una fecha, hora y número de personas",
-                "parameters": {
-                    "date": "Fecha en formato YYYY-MM-DD",
-                    "time": "Hora en formato HH:MM",
-                    "party_size": "Número de personas (1-20)"
-                }
+                "description": descs.get("check_availability", ""),
             },
             "create_reservation": {
                 "endpoint": "POST /widget-api/tables/v1/reserve",
-                "description": "Crear una nueva reserva. Asigna automáticamente la mejor mesa disponible",
-                "parameters": {
-                    "date": "Fecha en formato YYYY-MM-DD",
-                    "time": "Hora en formato HH:MM",
-                    "party_size": "Número de personas",
-                    "customer_name": "Nombre del cliente",
-                    "customer_phone": "Teléfono del cliente",
-                    "special_requests": "(opcional) Peticiones especiales"
-                }
+                "description": descs.get("create_reservation", ""),
             },
             "search_reservations": {
                 "endpoint": "POST /widget-api/tables/v1/search",
-                "description": "Buscar reservas por número de teléfono",
-                "parameters": {
-                    "phone": "Número de teléfono del cliente"
-                }
+                "description": descs.get("search_reservations", ""),
             },
             "cancel_reservation": {
                 "endpoint": "POST /widget-api/tables/v1/cancel",
-                "description": "Cancelar una reserva existente",
-                "parameters": {
-                    "reservation_id": "ID de la reserva (ej: RES-xxx)",
-                    "phone": "Teléfono para verificación"
-                }
+                "description": descs.get("cancel_reservation", ""),
             },
             "modify_reservation": {
                 "endpoint": "POST /widget-api/tables/v1/modify",
-                "description": "Cambiar fecha y/o hora de una reserva existente",
-                "parameters": {
-                    "reservation_id": "ID de la reserva (ej: RES-xxx)",
-                    "phone": "Teléfono para verificación",
-                    "new_date": "(opcional) Nueva fecha en formato YYYY-MM-DD",
-                    "new_time": "(opcional) Nueva hora en formato HH:MM"
-                }
+                "description": descs.get("modify_reservation", ""),
+            },
+            "update_notes": {
+                "endpoint": "POST /widget-api/tables/v1/update-notes",
+                "description": descs.get("update_notes", ""),
             }
         }
     }
@@ -380,7 +360,7 @@ async def modify_reservation(request: ModifyRequest):
 
     At least one of new_date or new_time must be provided.
     The system will verify availability before making changes.
-    Each reservation has a duration of 2 hours.
+    Reservation duration is configured in business.yaml.
 
     Requires phone verification to ensure only the customer can modify their reservation.
 

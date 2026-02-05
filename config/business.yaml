@@ -1,0 +1,108 @@
+# ============================================================
+# Business Configuration
+# Edit this file to adapt the service to any business.
+# No Python code changes needed.
+# ============================================================
+
+business_name: "Bella Italia"
+business_type: "restaurante"
+
+# ------------------------------------------------------------
+# Reservation settings
+# ------------------------------------------------------------
+reservation:
+  duration_hours: 2.0
+  max_party_size: 20
+  min_party_size: 1
+  phone_min_digits: 7
+
+# ------------------------------------------------------------
+# Table definitions (used by setup_sheets.py and mock mode)
+# ------------------------------------------------------------
+tables:
+  - id: "1"
+    name: "Mesa 1"
+    capacity: 2
+    location: "interior"
+  - id: "2"
+    name: "Mesa 2"
+    capacity: 2
+    location: "interior"
+  - id: "3"
+    name: "Mesa 3"
+    capacity: 4
+    location: "interior"
+  - id: "4"
+    name: "Mesa 4"
+    capacity: 4
+    location: "interior"
+  - id: "5"
+    name: "Mesa 5"
+    capacity: 6
+    location: "interior"
+  - id: "6"
+    name: "Mesa Terraza 1"
+    capacity: 4
+    location: "terraza"
+  - id: "7"
+    name: "Mesa Terraza 2"
+    capacity: 4
+    location: "terraza"
+  - id: "8"
+    name: "Mesa Terraza 3"
+    capacity: 6
+    location: "terraza"
+  - id: "9"
+    name: "Mesa Privada"
+    capacity: 8
+    location: "interior"
+
+# ------------------------------------------------------------
+# ElevenLabs tool descriptions
+# Used by configure_elevenlabs.py when registering tools
+# ------------------------------------------------------------
+tool_descriptions:
+  check_availability: >-
+    Verifica la disponibilidad de mesas para una fecha, hora y numero de personas.
+    SIEMPRE usa esta herramienta ANTES de crear una reserva.
+  create_reservation: >-
+    Crea una nueva reserva. Verifica disponibilidad primero.
+    NO menciones codigos de reserva al cliente, solo confirma la reserva con fecha, hora y nombre.
+  search_reservations: >-
+    Busca las reservas de un cliente por su numero de telefono (solo numeros).
+  cancel_reservation: >-
+    Cancela una reserva. Primero busca la reserva con search_reservations usando el telefono del cliente.
+  modify_reservation: >-
+    Modifica fecha y/o hora de una reserva. Primero busca la reserva con search_reservations.
+  update_notes: >-
+    Agrega notas a una reserva existente. Usa esto para agregar restricciones alimenticias,
+    alergias, peticiones especiales, celebraciones, o cualquier informacion adicional
+    DURANTE la conversacion. Las notas se AGREGAN a las existentes.
+
+# ------------------------------------------------------------
+# System messages (used in API responses)
+# Supports {variable} placeholders via Python str.format()
+# ------------------------------------------------------------
+messages:
+  no_tables_capacity: "No hay mesas con capacidad para {party_size} personas"
+  no_availability: "No hay mesas disponibles para {party_size} personas el {date} a las {time}"
+  tables_available: "Hay {count} mesa(s) disponible(s)"
+  reservation_confirmed: "Reserva confirmada para {party_size} personas el {date} a las {time}"
+  no_reservations_found: "No se encontraron reservas"
+  no_reservations_phone: "No se encontraron reservas para el telefono {phone}"
+  reservations_found: "Se encontraron {count} reserva(s)"
+  phone_mismatch: "El telefono no coincide con la reserva"
+  already_cancelled: "Esta reserva ya esta cancelada"
+  reservation_cancelled: "Reserva {reservation_id} cancelada correctamente"
+  reservation_not_found: "Reserva {reservation_id} no encontrada"
+  cannot_modify_cancelled: "No se puede modificar una reserva cancelada"
+  no_changes: "No se especificaron cambios en fecha u hora"
+  reservation_modified: "Reserva modificada: {date} a las {time}"
+  no_availability_modify: "No hay disponibilidad para {date} a las {time}. {detail}"
+  notes_updated: "Notas actualizadas para la reserva"
+  cannot_add_notes_cancelled: "No se pueden agregar notas a una reserva cancelada"
+  all_tables_occupied: "Todas las mesas estan ocupadas en ese horario"
+  sheets_save_error: "Error al guardar la reserva en Google Sheets"
+  sheets_update_error: "Error al actualizar el estado de la reserva"
+  sheets_notes_error: "Error al actualizar las notas"
+  sheets_modify_error: "Error al actualizar la reserva en Google Sheets"
