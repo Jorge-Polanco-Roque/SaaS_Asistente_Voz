@@ -6,8 +6,22 @@ This file provides guidance to Claude Code when working with this repository.
 
 **Multi-Business Voice Service** - Servicio de voz generico para gestion de reservas/citas usando ElevenLabs Conversational AI y Google Sheets como backend. Adaptable a cualquier negocio cambiando solo archivos de configuracion.
 
-**Current Version**: 2.1.0
+**Current Version**: 2.2.0
 **Status**: Funcionando en desarrollo local con ngrok
+
+## Git Workflow
+
+**IMPORTANTE**: NO hacer merge a `main` a menos que el usuario lo pida explícitamente. Solo actualizar `dev` en GitHub.
+
+```bash
+# Workflow normal (solo dev)
+git add <archivos>
+git commit -m "mensaje"
+git push origin dev
+
+# Solo cuando el usuario lo pida explícitamente:
+git checkout main && git merge dev && git push origin main
+```
 
 ### Negocio Activo
 
