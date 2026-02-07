@@ -11,9 +11,9 @@ This file provides guidance to Claude Code when working with this repository.
 
 ### Negocio Activo
 
-| Negocio | Agent ID | Spreadsheet | Voice ID |
-|---------|----------|-------------|----------|
-| **Bella Italia (restaurante)** | `agent_7901kgfexyhvejbsr5ayg5nwxzsm` | `1UZYHP7BsnCVOHxdhSj30b5v2TiR2XdDTGYrRhk-zxGE` | `a5JUEQmqerfl9XqGF6dK` |
+| Negocio | Agent ID | Spreadsheet | Voice ID | Teléfono |
+|---------|----------|-------------|----------|----------|
+| **Bella Italia (restaurante)** | `agent_7901kgfexyhvejbsr5ayg5nwxzsm` | `1UZYHP7BsnCVOHxdhSj30b5v2TiR2XdDTGYrRhk-zxGE` | `a5JUEQmqerfl9XqGF6dK` | `+13262362563` ✅ |
 
 ### Otros Negocios Configurados (backups)
 
@@ -68,11 +68,12 @@ El codigo usa "tables" internamente pero representa **cualquier recurso reservab
 ```
 1. Editar config/business.yaml    -> nombre, recursos, duracion, mensajes
 2. Editar config/agent_prompt.txt -> personalidad del agente de voz
-3. Editar .env                    -> API keys, Sheet ID, Agent ID, webhook URL
+3. Editar .env                    -> API keys, Sheet ID, Agent ID, Twilio, webhook URL
 4. Crear Google Sheet + compartir con service account
 5. python setup_sheets.py         -> crea estructura en Google Sheets
 6. python configure_elevenlabs.py -> actualiza agente con prompt + tools
-7. uvicorn app.main:app           -> servicio listo
+7. python setup_phone.py import   -> conecta número telefónico (opcional)
+8. uvicorn app.main:app           -> servicio listo
 ```
 
 ### Archivos que se editan vs. archivos que nunca se tocan
@@ -138,6 +139,25 @@ python configure_elevenlabs.py list
 
 # Test config loading
 python -c "from config.config_loader import config; print(config.business_name)"
+```
+
+### Phone Configuration (Twilio)
+
+```bash
+# Ver números disponibles para comprar
+python setup_phone.py list-available --country US
+
+# Ver números que ya tenemos en Twilio
+python setup_phone.py list-owned
+
+# Importar número de Twilio a ElevenLabs (usa TWILIO_PHONE_NUMBER de .env)
+python setup_phone.py import
+
+# Ver estado de la integración telefónica
+python setup_phone.py status
+
+# Desconectar número de ElevenLabs
+python setup_phone.py remove
 ```
 
 ### Testing API
@@ -220,6 +240,11 @@ GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 GOOGLE_SHEETS_SPREADSHEET_ID=your_spreadsheet_id
 GOOGLE_SHEETS_MESAS_SHEET=Mesas
 GOOGLE_SHEETS_RESERVAS_SHEET=Reservas
+
+# Twilio (para llamadas telefónicas)
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_PHONE_NUMBER=+1234567890  # Número asignado al negocio
 ```
 
 ### Google Sheets Structure
@@ -280,11 +305,12 @@ voice-service/
 │       └── google_sheets_service.py #   Google Sheets integration (lee config)
 ├── configure_elevenlabs.py          # Script: configura agente (prompt + tools)
 ├── setup_sheets.py                  # Script: crea estructura en Google Sheets
+├── setup_phone.py                   # Script: configura número telefónico (Twilio + ElevenLabs)
 ├── index.html                       # Frontend con widget de ElevenLabs
 ├── elevenlabs_tools_config.json     # Referencia de config de tools
 ├── Dockerfile                       # Docker config para Cloud Run
 ├── cloudrun-env.yaml                # Cloud Run env vars
-├── requirements.txt                 # Python dependencies (incluye pyyaml)
+├── requirements.txt                 # Python dependencies (pyyaml, twilio)
 ├── .env                             # Variables de entorno locales
 └── sheets-credentials.json          # Google Service Account credentials
 ```
@@ -439,6 +465,12 @@ Para probar con texto ademas de voz:
 
 ## Changelog
 
+### v2.2.0 (2026-02-07) - Integración Telefónica (Twilio)
+1. **setup_phone.py**: Script para gestionar números telefónicos
+2. **Twilio integration**: Variables de entorno y configuración
+3. **Importación a ElevenLabs**: Número +13262362563 conectado al agente
+4. **Documentación**: Plan completo para SaaS multi-tenant con telefonía
+
 ### v2.1.0 (2026-02-05) - Mejoras de Experiencia Conversacional
 1. **Flujo natural**: Una pregunta a la vez (REGLA DE ORO)
 2. **Idioma consistente**: Solo espanol, italiano solo si el cliente lo pide
@@ -522,6 +554,397 @@ Nivel 3: Terminar -> Usar end_call con mensaje de despedida
 - [ ] Integrar transferencia real a humano (webhook o Twilio)
 - [ ] Agregar metrica de llamadas terminadas por agresividad
 - [ ] Logging de cuando se usa end_call y por que razon
+
+---
+
+## Plan v2.2.0 - Integración Telefónica (Twilio)
+
+### Fecha: 2026-02-07
+### Estado: COMPLETADO
+
+### Objetivo
+
+Habilitar llamadas telefónicas reales al agente de voz, de manera que:
+1. Un cliente pueda llamar a un número de teléfono y hablar con el agente
+2. La configuración sea 100% programática (sin pasos manuales)
+3. El sistema sea **SaaS-ready**: cambiar de tenant solo requiere cambiar configuración
+
+### Visión SaaS Multi-Tenant
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        ARQUITECTURA MULTI-TENANT                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   CANALES DE ENTRADA                                                    │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐                             │
+│   │ Web      │  │ Teléfono │  │ WhatsApp │                             │
+│   │ Widget   │  │ (Twilio) │  │ (Meta)   │                             │
+│   └────┬─────┘  └────┬─────┘  └────┬─────┘                             │
+│        │             │             │                                    │
+│        └─────────────┼─────────────┘                                    │
+│                      ▼                                                  │
+│            ┌─────────────────┐                                          │
+│            │   ElevenLabs    │  (1 agent por tenant)                    │
+│            │   Agent         │                                          │
+│            └────────┬────────┘                                          │
+│                     │                                                   │
+│                     ▼                                                   │
+│            ┌─────────────────┐                                          │
+│            │   Cloud Run     │  (1 servicio, multi-tenant)              │
+│            │   Voice Service │                                          │
+│            └────────┬────────┘                                          │
+│                     │                                                   │
+│         ┌───────────┴───────────┐                                       │
+│         ▼                       ▼                                       │
+│  ┌─────────────┐        ┌─────────────┐                                │
+│  │  Firestore  │        │   Secret    │                                │
+│  │  (configs   │        │   Manager   │                                │
+│  │  + reservas)│        │  (API keys) │                                │
+│  └─────────────┘        └─────────────┘                                │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Principio de Diseño
+
+| Aspecto | Hardcoded | Configurable (SaaS-ready) |
+|---------|-----------|---------------------------|
+| Credenciales Twilio | En código | `.env` → Secret Manager |
+| Número de teléfono | En código | `.env` / `business.yaml` → Firestore |
+| Agent ID | En código | `.env` → Firestore |
+| Prompt del agente | En código | `agent_prompt.txt` → Firestore |
+| Lógica de reservas | ❌ Nunca | Siempre en código Python |
+
+### Nuevas Variables de Entorno
+
+```bash
+# .env (agregar a las existentes)
+
+# Twilio Configuration
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_PHONE_NUMBER=+13262362563  # Número asignado al tenant
+```
+
+### Nuevo Script: setup_phone.py
+
+```python
+# Funcionalidades del script:
+
+setup_phone.py list-available   # Listar números disponibles para comprar
+setup_phone.py list-owned       # Listar números que ya tenemos en Twilio
+setup_phone.py buy <number>     # Comprar un número específico
+setup_phone.py import           # Importar TWILIO_PHONE_NUMBER a ElevenLabs
+setup_phone.py status           # Ver estado de la integración telefónica
+setup_phone.py remove           # Desconectar número de ElevenLabs
+```
+
+### Flujo de Onboarding de Nuevo Tenant (Actualizado)
+
+```
+ANTES (v2.1 - Solo Web Widget):
+1. Editar config/business.yaml
+2. Editar config/agent_prompt.txt
+3. Editar .env (ElevenLabs + Google)
+4. python setup_sheets.py
+5. python configure_elevenlabs.py
+6. uvicorn app.main:app
+
+AHORA (v2.2 - Web + Teléfono):
+1. Editar config/business.yaml
+2. Editar config/agent_prompt.txt
+3. Editar .env (ElevenLabs + Google + Twilio)  # NUEVO: Twilio
+4. python setup_sheets.py
+5. python configure_elevenlabs.py
+6. python setup_phone.py import                 # NUEVO: Importar teléfono
+7. uvicorn app.main:app
+```
+
+### Estructura de Archivos (Actualizada)
+
+```
+voice-service/
+├── config/
+│   ├── business.yaml           # + phone_number (opcional, para referencia)
+│   ├── agent_prompt.txt
+│   └── config_loader.py
+├── app/
+│   ├── main.py
+│   ├── api/tables.py
+│   └── services/
+│       ├── google_sheets_service.py
+│       └── twilio_service.py   # NUEVO: Servicio de Twilio (futuro)
+├── configure_elevenlabs.py
+├── setup_sheets.py
+├── setup_phone.py              # NUEVO: Configuración de teléfono
+├── index.html
+└── requirements.txt            # + twilio
+```
+
+### Implementación por Fases
+
+#### Fase 1: Número Existente (COMPLETADO)
+- [x] Cuenta Twilio creada
+- [x] Número existente: +1 326 236 2563
+- [x] Agregar variables Twilio a .env
+- [x] Crear script setup_phone.py
+- [x] Importar número a ElevenLabs (phnum_1401kgwcdvwafhtv3s6h6bxg3s4d)
+- [ ] Probar llamada entrante
+
+#### Fase 2: Compra Programática (FUTURO)
+- [ ] Función para buscar números disponibles
+- [ ] Función para comprar número
+- [ ] Integrar en flujo de onboarding
+
+#### Fase 3: Llamadas Salientes (FUTURO)
+- [ ] Endpoint para iniciar llamada saliente
+- [ ] Usar caso: recordatorios de reserva
+- [ ] Usar caso: confirmación de reserva
+
+### API de Twilio a Usar
+
+```python
+from twilio.rest import Client
+
+# Inicializar cliente
+client = Client(account_sid, auth_token)
+
+# Listar números disponibles (para comprar)
+available = client.available_phone_numbers("US").local.list(limit=10)
+
+# Comprar número
+purchased = client.incoming_phone_numbers.create(phone_number="+1234567890")
+
+# Listar números que ya tenemos
+owned = client.incoming_phone_numbers.list()
+```
+
+### API de ElevenLabs para Teléfono
+
+```python
+import requests
+
+# Importar número de Twilio a ElevenLabs
+response = requests.post(
+    "https://api.elevenlabs.io/v1/convai/phone-numbers",
+    headers={"xi-api-key": ELEVENLABS_API_KEY},
+    json={
+        "phone_number_provider": "twilio",
+        "twilio_config": {
+            "phone_number": "+13262362563",
+            "account_sid": TWILIO_ACCOUNT_SID,
+            "auth_token": TWILIO_AUTH_TOKEN
+        },
+        "agent_id": ELEVENLABS_AGENT_ID
+    }
+)
+
+# Listar números importados
+response = requests.get(
+    "https://api.elevenlabs.io/v1/convai/phone-numbers",
+    headers={"xi-api-key": ELEVENLABS_API_KEY}
+)
+```
+
+### Consideraciones para Cuenta Trial de Twilio
+
+| Limitación | Impacto | Solución |
+|------------|---------|----------|
+| Solo llamadas a números verificados | No puedes recibir llamadas de cualquiera | Verificar números de prueba |
+| Mensaje "trial account" en llamadas | Suena poco profesional | Upgrade a cuenta pagada ($20) |
+| $15.50 de crédito | Suficiente para pruebas | Agregar fondos para producción |
+
+### Comandos de Prueba
+
+```bash
+# Después de implementar setup_phone.py:
+
+# Ver estado actual
+python setup_phone.py status
+
+# Importar número a ElevenLabs
+python setup_phone.py import
+
+# Verificar que quedó configurado
+python configure_elevenlabs.py list
+
+# Probar llamando al número
+# Llamar a +1 326 236 2563 desde un número verificado en Twilio
+```
+
+### Notas para Producción (SaaS)
+
+**Modelo 1: Cuenta Twilio Centralizada (Recomendado para empezar)**
+- Una cuenta Twilio del SaaS
+- Compras números para cada tenant
+- Tú controlas costos y billing
+- Más fácil de gestionar
+
+**Modelo 2: Cuenta Twilio por Tenant**
+- Cada cliente trae su propia cuenta Twilio
+- Más aislamiento
+- Cliente paga directamente a Twilio
+- Más complejo de implementar
+
+**Recomendación**: Empezar con Modelo 1, ofrecer Modelo 2 como opción enterprise.
+
+---
+
+## Plan v2.3.0 - WhatsApp + Auto-Colgar
+
+### Fecha: 2026-02-07
+### Estado: PENDIENTE
+
+### Objetivos
+
+1. **Integración WhatsApp**: Habilitar el agente en WhatsApp Business
+2. **Detección de fin de llamada**: Usar `end_call` automáticamente cuando la conversación termina
+
+---
+
+### Parte 1: Detección de Fin de Llamada
+
+#### Problema
+La llamada sigue activa después de que el cliente y el agente se despiden. El usuario tiene que colgar manualmente.
+
+#### Solución
+Agregar lógica en el prompt para que el agente use `end_call` automáticamente cuando detecte:
+- Despedidas del cliente ("gracias, adiós", "hasta luego", "bye", etc.)
+- Confirmación final completada
+- El cliente indica que ya no necesita nada más
+
+#### Cambios en agent_prompt.txt
+
+```
+## FINALIZAR LLAMADA AUTOMÁTICAMENTE
+
+Usa end_call para terminar la llamada en estos casos:
+
+1. DESPUÉS DE DESPEDIDA MUTUA
+   - Cliente: "Gracias, hasta luego"
+   - Tú: "Gracias por llamar, que tengas buen día!" + [end_call]
+
+2. DESPUÉS DE CONFIRMAR RESERVA Y DESPEDIRSE
+   - Tú: "Listo, tu reserva está confirmada. ¿Necesitas algo más?"
+   - Cliente: "No, eso es todo, gracias"
+   - Tú: "Perfecto, te esperamos el sábado. ¡Hasta pronto!" + [end_call]
+
+3. FRASES QUE INDICAN FIN
+   - "Eso es todo"
+   - "No, gracias"
+   - "Ya no necesito nada"
+   - "Adiós" / "Bye" / "Hasta luego" / "Chao"
+   - "Gracias, que estés bien"
+
+4. SILENCIO PROLONGADO DESPUÉS DE DESPEDIDA
+   - Si ya te despediste y no hay respuesta, usa end_call
+
+IMPORTANTE: Siempre despídete ANTES de usar end_call.
+```
+
+#### Implementación
+- [x] Actualizar `config/agent_prompt.txt` con reglas de auto-colgar
+- [x] Ejecutar `python configure_elevenlabs.py` para subir cambios
+- [ ] Probar con llamadas de prueba
+
+---
+
+### Parte 2: Integración WhatsApp
+
+#### Requisitos Previos
+1. **Meta Business Account** - Cuenta de empresa en Meta
+2. **WhatsApp Business API** - Acceso a la API (no la app normal)
+3. **Número de WhatsApp Business** - Número verificado para el negocio
+
+#### Flujo de Configuración
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  SETUP WHATSAPP                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. Meta Business Suite                                     │
+│     └── Crear cuenta de empresa (si no existe)              │
+│     └── Verificar negocio                                   │
+│                                                             │
+│  2. WhatsApp Business Platform                              │
+│     └── Crear app en Meta Developers                        │
+│     └── Agregar producto "WhatsApp"                         │
+│     └── Obtener número de prueba o agregar número propio    │
+│                                                             │
+│  3. ElevenLabs Dashboard                                    │
+│     └── Agents → Tu agente → Channels → WhatsApp            │
+│     └── Conectar cuenta (OAuth con Meta)                    │
+│     └── Seleccionar número de WhatsApp                      │
+│                                                             │
+│  4. Verificar                                               │
+│     └── Enviar mensaje al número de WhatsApp                │
+│     └── El agente debe responder                            │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Limitaciones Conocidas
+
+| Aspecto | Limitación |
+|---------|------------|
+| Setup inicial | Requiere pasos manuales en Meta y ElevenLabs (OAuth) |
+| API programática | No hay API para crear conexión WhatsApp automáticamente |
+| Costo | WhatsApp Business API tiene costo por conversación |
+| Verificación | El negocio debe estar verificado en Meta |
+
+#### Modelo SaaS para WhatsApp
+
+**Opción A: Cuenta WhatsApp Centralizada** (Complejo)
+- Una cuenta de WhatsApp Business del SaaS
+- Múltiples números (uno por tenant)
+- Requiere ser Business Solution Provider (BSP)
+
+**Opción B: Cada Tenant su Cuenta** (Recomendado)
+- Cada cliente configura su propio WhatsApp Business
+- Conexión manual asistida en onboarding
+- Más simple, menos costo operativo
+
+#### Pasos para Implementar
+
+##### Fase 1: Cuenta de Prueba (PENDIENTE)
+- [ ] Crear Meta Business Account
+- [ ] Crear app en Meta Developers
+- [ ] Obtener número de prueba de WhatsApp
+- [ ] Conectar a ElevenLabs via dashboard
+- [ ] Probar enviar mensaje
+
+##### Fase 2: Documentación (PENDIENTE)
+- [ ] Documentar proceso de setup para nuevos tenants
+- [ ] Crear checklist de onboarding WhatsApp
+- [ ] Agregar a CLAUDE.md
+
+##### Fase 3: Número Propio (FUTURO)
+- [ ] Registrar número de WhatsApp Business propio
+- [ ] Verificar negocio en Meta
+- [ ] Migrar de número de prueba a producción
+
+#### Variables de Entorno (Futuras)
+
+```bash
+# WhatsApp (informativo - la conexión es via OAuth en dashboard)
+WHATSAPP_PHONE_NUMBER=+521234567890
+WHATSAPP_BUSINESS_ACCOUNT_ID=xxxxx
+```
+
+#### Notas Importantes
+
+1. **La conexión inicial de WhatsApp NO es programática** - requiere OAuth en el dashboard de ElevenLabs
+
+2. **Una vez conectado**, ElevenLabs maneja todo automáticamente
+
+3. **Para SaaS**: El onboarding de WhatsApp será semi-manual (guiar al cliente paso a paso)
+
+4. **Costo de WhatsApp Business API**:
+   - Conversaciones iniciadas por usuario: ~$0.005-0.015 USD
+   - Conversaciones iniciadas por negocio: ~$0.02-0.05 USD
+   - Varía por país
 
 ---
 
